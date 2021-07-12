@@ -1,0 +1,401 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="robots" content="NOINDEX,NOFOLLOW,NOARCHIVE">
+		<title>mv</title>
+		<script src="../js/sjclc.js"></script>
+		<script>
+			var video;
+			var video_blob;
+			var video_volume;
+			var play_list;
+			var play_index;
+			var hidden_items;
+			var isPad;
+			var loop_type ="";
+			function decrypt(){
+				
+
+				try{
+					video_volume = parseFloat(localStorage.getItem('volume'));
+					
+				}catch (e) {
+					video_volume=1.0;
+					console.log("localStorage.getItem exception "+e);
+				}
+				
+				if(isNaN(video_volume)) video_volume=1.0;
+				
+				
+				rn = "Sg|lrb;Q^Y";
+				try{
+					key = sjcl.codec.hex.toBits(localStorage.getItem('key'));
+					iv  = sjcl.codec.hex.toBits(localStorage.getItem('iv'));
+					hidden_items = localStorage.getItem('hidden');
+					if(hidden_items == null) hidden_items = "";
+				}catch (e) {
+					key='';iv='';hidden_items='';
+					console.log("localStorage.getItem exception "+e);
+				}
+					
+				if (key.length === 0 || iv.length === 0) {
+        	password = prompt("password");
+        	for (i = 0; i < 100; i++) {
+            password = password + rn + password;
+            if (password.length > 1500) break;
+        	}
+        	iv = sjcl.bitArray.bitSlice(sjcl.hash.sha256.hash(password + rn), 0, 128);
+        	key = sjcl.hash.sha256.hash(password);
+    		}
+    		
+    		
+    		try {
+    			aes=new sjcl.cipher.aes(key);
+        	de_result = sjcl.codec.utf8String.fromBits(sjcl.mode.cbc.decrypt(aes, sjcl.codec.base64.toBits("C1XCJ+LTV5CDYvsKrlH0lxXSYvgt9H9g6fPGhAL2FuGMzerfpKOkYj5e9iek3WOBJrWtIem5us84r4r8R+/uqnqZcsSZ6NLb42/hjBWFED5FrtBLwSpeNQHQkfUTYf3Vg02caCQCrnXnd/qKp/xa4XYGqx2M2iCQRKDxJck394Ugc+LKzNYuOlJQXabUbqb9ENj1Iu9jEm/SSuL8fXPD9A=="), iv));
+        	        	
+        	//document.getElementById("list").innerHTML = de_result;
+        	var file;
+					var list = document.getElementById("list");
+					var item;
+					
+        	play_list = eval('('+de_result.replace(/\n/g,'')+')');
+					for (i in play_list) {
+						file = play_list[i]['artist']+' - '+play_list[i]['title']+'.mp4';
+						
+						if(hidden_items.indexOf("\v"+file+"\v") !== -1){
+							continue;
+						}
+						
+						item = document.createElement("div");
+						item.className="item";
+						item.id="item"+i;
+						
+						
+						item.innerHTML  = '<div class="item_img">'
+						+'<img src="thumbnails/'+file+'.jpg" onclick="load_video(\''+file+'\')" /></div><div class="item_text">'
+						+'<a href="javascript:void(0)" onclick="load_video(\''+file+'\')">'+play_list[i]['title']+'<br/><br/>'+play_list[i]['artist']+'</a><br/><br/><br/>'
+						+'<a href="'+file+'" target="_blank" >'+play_list[i]['size']+'</a> &nbsp; &nbsp; '
+						+'<a href="javascript:void(0)" style="color:#999;margin-left:3em;" onclick="hide(\''+file+'\',\'item'+i+'\')" >&times;</a></div>';
+						list.appendChild(item);
+					}
+
+        	
+        	try{
+        		
+						localStorage.setItem('key',sjcl.codec.hex.fromBits(key));
+						localStorage.setItem('iv',sjcl.codec.hex.fromBits(iv));
+					}catch (e) {console.error("localStorage.setItem exception "+e);}
+					
+        
+    		}catch(e) {
+    			document.body.innerHTML = "decrypt error : " + e;
+        	try{
+						localStorage.setItem('key','');
+						localStorage.setItem('iv','');
+					}catch (e) {console.error("localStorage.setItem exception "+e);}
+    		}
+				
+			}
+			
+			function load_video(name){
+				video = document.getElementById("player");
+				//video.setAttribute("poster","./thumbnails/"+name+".jpg");
+				document.title = name.split(' - ')[1].replace('.mp4','');
+				var pg=document.getElementById("playground");
+				pg.style.display='block';
+				pg.style.position="fixed";
+				pg.style.left="0";
+				//pg.style.right="0";
+				
+				pg.style.top="0";
+				pg.style.width="100%";
+				pg.style.height="100%";
+				pg.style.backgroundColor="#000000";
+				
+				//get play index
+				for (i in play_list) {
+						if(play_list[i]['artist']+' - '+play_list[i]['title']+'.mp4' === name){
+							play_index = i;
+							break;
+						}
+				}
+				console.log("play_index"+play_index);
+				
+				var userAgentInfo = navigator.userAgent.toLowerCase();
+				//console.log(navigator.userAgent);
+				
+				if(window.location.host.toLowerCase().indexOf('.pages.dev') === -1 ){
+					video.src = name;
+					video.play();
+					return;
+				}
+				
+				if(userAgentInfo.indexOf('ipad') === -1 && userAgentInfo.indexOf('iphone') === -1 && userAgentInfo.indexOf('mac') === -1 ){
+					video.src = name;
+					video.play();
+					return;
+				}
+				
+			
+
+				//video.setAttribute("poster","./thumbnails/"+name+".jpg");
+				//video.setAttribute("poster","./Spinner-5.gif");
+				
+
+
+				
+				//window.URL.revokeObjectURL(video_blob);
+				isPad = false;
+				fetch(name).then(function(response) {
+  				if(response.ok) {return response.blob();}
+  				throw new Error('http not ok.');
+				}).then(function(blob) {
+					//alert(" type "+blob.type +" size "+blob.size);
+					if(blob.type == ""){
+						isPad = true;
+						var reader = new FileReader();
+						reader.readAsDataURL(blob);
+						//reader.readAsBinaryString(blob);
+						reader.onload = function() {
+							video.src = reader.result.replace('data:;base64,','data:video/mp4;base64,');
+						}
+					}else{
+						video_blob = window.URL.createObjectURL(blob);
+						video.src = video_blob;
+					}
+					video.load();
+					video.play();
+					
+				}).catch(function(e) {
+  				console.log('fetch error: ', e.message);
+  				alert('fetch error: ', e.message);
+				});
+				
+			}
+			
+			function adjust_page(){
+				
+				var isMobile = false;
+				
+				video.volume = video_volume;
+
+				console.log(window.innerHeight+" "+document.documentElement.clientHeight+" "+document.body.clientHeight);
+				
+				var h = window.innerHeight||document.documentElement.clientHeight||document.body.clientHeight;
+				var w = window.innerWidth||document.documentElement.clientWidth||document.body.clientWidth;
+				//var h = screen.availHeight*window.devicePixelRatio;
+				
+				var userAgentInfo = navigator.userAgent;
+				//var mobileAgents = [ "Android", "iPhone", "SymbianOS", "Windows Phone", "iPod"];
+				var mobileAgents = [ "Android", "iPhone", "SymbianOS", "Windows Phone", "iPad","iPod"];
+				for (var i = 0; i < mobileAgents.length; i++) {
+        		if (userAgentInfo.indexOf(mobileAgents[i]) > 0) {
+            			//document.getElementById("player").style.width="100%";
+            			h = screen.availHeight*window.devicePixelRatio;
+            			w = screen.availWidth*window.devicePixelRatio;
+            			isMobile = true;
+            			break;
+        		}
+    		}
+    		
+    		
+				//alert(" hhh "+h + "www"+w);
+				//alert(" vhh "+video.videoHeight + "vww"+video.videoWidth);
+				//pg.style.height=h+"px"; parseInt(  (w  - video.videoWidth)/2  )
+				video.style.position="fixed";
+				//video.setAttribute("height",video.videoHeight+"px");//复位高度
+				//video.setAttribute("width",video.videoWidth+"px");//复位宽度
+				var h_offset = 0;
+				if(isMobile){
+					video.setAttribute("width","100%");
+					
+					h_offset = parseInt((video.videoHeight - video.videoHeight/(video.videoWidth/w))/2);
+					
+
+					video.style.left = "0px";
+				}else{
+					video.style.left =  parseInt(  (w  - video.videoWidth)/2  )+"px";
+				}
+				//alert(" vhh -"+video.videoHeight + "vww -"+video.videoWidth);
+				//横型 并且高度容下视频 剧中显示
+				if(video.videoWidth >= video.videoHeight && h >= video.videoHeight){
+						if(isPad)
+							video.style.top="0px";
+						else
+							video.style.top= parseInt(  (h  - video.videoHeight)/2 + h_offset )+"px";
+				}
+				//横型 并且高度容不下视频 视频高度-100px
+				if(video.videoWidth >= video.videoHeight && h < video.videoHeight){
+						video.style.top="0px";
+						video.setAttribute("height",(h-100)+"px");
+				}
+				if(video.videoWidth < video.videoHeight){
+					video.style.top= "0px";
+					//video.setAttribute("height","94%");
+					//video.setAttribute("height",(h-100)+"px");
+				}
+				
+				//竖型 并且宽度容下
+				//if(video.videoWidth < video.videoHeight && h > video.videoHeight){
+				
+				
+				//else{
+				//		//video.style.marginTop= "10px";
+				//		video.style.marginTop= "0px";
+				//		video.setAttribute("height",(h-100)+"px");
+				//}
+				
+
+				//console.log("pg.offsetHeight"+pg.offsetHeight);
+				//console.log("video.videoHeight"+video.videoHeight);
+				//var h=pg.offsetHeight+16;
+				//document.getElementById("list").style.marginTop=h+"px";
+	
+			}
+			
+
+
+			function close_player(){
+				console.log("video.volume"+video.volume);
+				video_volume = video.volume;
+				try{
+						localStorage.setItem('volume',video_volume);
+				}catch (e) {console.error("localStorage.setItem exception "+e);}
+						
+				video.pause();
+				window.URL.revokeObjectURL(video_blob);
+				video.src = "";
+				var pg=document.getElementById("playground");
+				pg.style.display='none';
+			}
+			
+			
+			function play_end(){
+				//alert("end");	
+
+				if(video.getAttribute("loop") == "loop"){
+					return;
+				}
+				
+				video_volume = video.volume;
+				window.URL.revokeObjectURL(video_blob);
+				try{
+						localStorage.setItem('volume',video_volume);
+				}catch (e) {console.error("localStorage.setItem exception "+e);}
+					
+				if(loop_type.indexOf("playlist") !== -1){
+					play_index++;
+					
+					while(typeof(play_list[play_index]) !== 'undefined' 
+					&& hidden_items.indexOf(play_list[play_index]['artist']+' - '+play_list[play_index]['title']+'.mp4') !== -1){
+						play_index++;
+					}
+					
+					if(typeof(play_list[play_index]) === 'undefined')
+						play_index = 0;
+					
+					while(typeof(play_list[play_index]) !== 'undefined' 
+					&& hidden_items.indexOf(play_list[play_index]['artist']+' - '+play_list[play_index]['title']+'.mp4') !== -1){
+						play_index++;
+					}
+						
+					load_video(play_list[play_index]['artist']+' - '+play_list[play_index]['title']+'.mp4');
+				}
+				
+				if(loop_type.indexOf("once") !== -1){
+					play_index++;
+					
+					while(typeof(play_list[play_index]) !== 'undefined' 
+					&& hidden_items.indexOf(play_list[play_index]['artist']+' - '+play_list[play_index]['title']+'.mp4') !== -1){
+						play_index++;
+					}
+					
+					if(typeof(play_list[play_index]) === 'undefined')
+						return;
+						
+					load_video(play_list[play_index]['artist']+' - '+play_list[play_index]['title']+'.mp4');
+				}
+			}
+			
+			
+			function hide(name,index){
+				
+				if(!confirm("hide "+name+" ?")){
+					return;
+				}
+				
+				document.getElementById(index).style.display='none';
+				
+				
+				try{
+						hidden_items = localStorage.getItem('hidden');
+						if(hidden_items == null) hidden_items = "";
+						hidden_items += "\v"+name+"\v";
+						localStorage.setItem('hidden',hidden_items);
+				}catch (e) {console.error("localStorage exception "+e);}
+				
+			}
+			
+			function hidden_clean(){
+				hidden_items = "";
+				try{
+						localStorage.setItem('hidden',"");
+				}catch (e) {console.error("localStorage exception "+e);}
+				alert("clean hidden ok");
+				window.location.href=window.location.href;
+			}
+			
+			function loop(type){
+				loop_type = type;
+				video = document.getElementById("player");
+				//if(video.getAttribute("loop") !== 'undefined')
+					video.removeAttribute("loop");
+				if(type == "once" || type == "playlist"){
+					document.title =	document.title.split(' loop : ')[0] + ' loop : '+loop_type;
+				}
+				if(loop_type === "track"){
+					video.setAttribute("loop","loop");
+					document.title =	document.title.split(' loop : ')[0] + ' loop : '+loop_type;
+				}
+				
+				if(loop_type === "no"){
+					document.title =	document.title.split(' loop : ')[0];
+				}
+			}
+		</script>
+		<style>
+			body{width:100%;margin:0 auto;text-align:center;background-color:#15202B;color:#fff;}
+			a{color:#fff;background-color:transparent;text-decoration:none;font-weight:bold;font-size:24px;}
+			a:visited{color:#fff;}
+			a:hover{color:#fff;}
+			.item{float:left;display:inline-block;width:calc(50% - 20px);background-color:#1B2836;
+				text-align:left;border:1px solid #273345;border-radius:11px;margin-left:10px;margin-top:10px;}
+			.item_img{float:left;display:inline-block;height:240px;}
+			.item_img img{border-radius:11px; }
+			.item_text{float:left;display:inline-block;height:235px;width:calc(100% - 240px - 12px);margin-left:10px;padding-top:5px;word-wrap:break-word;word-break:break-all;}
+			.playground{display:none;}
+			.function{color:#1A91DA;margin-left:2em;}
+		</style>
+	</head>
+	<body onload='decrypt()'>
+		<a href="javascript:void(0)" >loop =&gt;</a>
+		<a href="javascript:void(0)" onclick="loop('no')" class="function">&#8603;</a> 
+		<a href="javascript:void(0)" onclick="loop('track')" class="function">1&#8635;</a> 
+		<a href="javascript:void(0)" onclick="loop('once')" class="function">L&#8594;</a> 
+		<a href="javascript:void(0)" onclick="loop('playlist')" class="function">L&#8635;</a>
+		<a href="javascript:void(0)" class="function">|</a>
+		<a href="javascript:void(0)" onclick="hidden_clean()"  class="function">&#10008;hinden</a>
+		<div class="playground" id="playground" onclick="close_player()">
+				<video id="player" controls="controls"  webkit-playsinline="true" playsinline="true" x5-playsinline="true" x-webkit-airplay="allow" oncanplay="adjust_page()" onended="play_end()"></video>
+		</div>
+		<div id="list" class="list">
+			
+			
+		</div>
+		
+	</body>
+</html>
+
+
